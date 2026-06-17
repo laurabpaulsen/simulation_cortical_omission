@@ -315,9 +315,6 @@ folder = os.path.join(dir, f'data/simulations/occpitial_{amplitude}nA_increasing
 #regions = ['lateraloccipital-lh']
 regions = ["ctx-lh-lateraloccipital"]
 
-/Volumes/Elements/simulation_cortical_omission/simulation_cortical_omission/data/MNE-sample-data/MEG/sample/sample_audvis_filt-0-40_raw.fif
-/Volumes/Elements/simulation_cortical_omission/data/MNE-sample-data/MEG/sample/sample_audvis_filt-0-40_raw.fif
-
 for region in regions: 
     print(f'--------- Running region {region} ----------')
     if not os.path.exists(folder):

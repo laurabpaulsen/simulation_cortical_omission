@@ -4,6 +4,110 @@ import nibabel as nib
 import os 
 import pandas as pd 
 
+
+def _marching_cubes(image, level, smooth=0, fill_hole_size=None, use_flying_edges=True):
+    """Compute marching cubes on a 3D image.
+    LK notes: copied directly from mne.surface, no changes made 
+    For some reason this function gave segmentation error when imported from mne.surface
+    but not when computing it line by line"""
+    # vtkDiscreteMarchingCubes would be another option, but it merges
+    # values at boundaries which is not what we want
+    # https://kitware.github.io/vtk-examples/site/Cxx/Medical/GenerateModelsFromLabels/  # noqa: E501
+    # Also vtkDiscreteFlyingEdges3D should be faster.
+    # If we ever want not-discrete (continuous/float) marching cubes,
+    # we should probably use vtkFlyingEdges3D rather than vtkMarchingCubes.
+    from vtkmodules.util.numpy_support import numpy_to_vtk, vtk_to_numpy
+    from vtkmodules.vtkCommonDataModel import vtkDataSetAttributes, vtkImageData
+    from vtkmodules.vtkFiltersCore import vtkThreshold
+    from vtkmodules.vtkFiltersGeneral import (
+        vtkDiscreteFlyingEdges3D,
+        vtkDiscreteMarchingCubes,
+    )
+    from vtkmodules.vtkFiltersGeometry import vtkGeometryFilter
+    from mne.surface import _vtk_smooth
+
+    if image.ndim != 3:
+        raise ValueError(f"3D data must be supplied, got {image.shape}")
+
+    level = np.array(level)
+    if level.ndim != 1 or level.size == 0 or level.dtype.kind not in "ui":
+        raise TypeError(
+            "level must be non-empty numeric or 1D array-like of int, "
+            f"got {level.ndim}D array-like of {level.dtype} with "
+            f"{level.size} elements"
+        )
+
+    # vtkImageData indexes as slice, row, col (Z, Y, X):
+    # https://discourse.vtk.org/t/very-confused-about-imdata-matrix-index-order/6608/2
+    # We can accomplish this by raveling with order='F' later, so we might as
+    # well make a copy with Fortran order now.
+    # We also use double as passing integer types directly can be problematic!
+    image = np.array(image, dtype=float, order="F")
+    image_shape = image.shape
+
+    # fill holes
+    if fill_hole_size is not None:
+        for val in level:
+            bin_image = image == val
+            mask = image == 0  # don't go into other areas
+            bin_image = binary_dilation(bin_image, iterations=fill_hole_size, mask=mask)
+            image[bin_image] = val
+
+    data_vtk = numpy_to_vtk(image.ravel(order="F"), deep=False)
+
+    mc = vtkDiscreteFlyingEdges3D() if use_flying_edges else vtkDiscreteMarchingCubes()
+    # create image
+    imdata = vtkImageData()
+    imdata.SetDimensions(image_shape)
+    imdata.SetSpacing([1, 1, 1])
+    imdata.SetOrigin([0, 0, 0])
+    imdata.GetPointData().SetScalars(data_vtk)
+
+    # compute marching cubes on smoothed data
+    mc.SetNumberOfContours(len(level))
+    for li, lev in enumerate(level):
+        mc.SetValue(li, lev)
+    mc.SetInputData(imdata)
+    mc.Update()
+    mc = _vtk_smooth(mc.GetOutput(), smooth)
+
+    # get verts and triangles
+    selector = vtkThreshold()
+    selector.SetInputData(mc)
+    dsa = vtkDataSetAttributes()
+    selector.SetInputArrayToProcess(
+        0,
+        0,
+        0,
+        imdata.FIELD_ASSOCIATION_POINTS
+        if use_flying_edges
+        else imdata.FIELD_ASSOCIATION_CELLS,
+        dsa.SCALARS,
+    )
+    geometry = vtkGeometryFilter()
+    geometry.SetInputConnection(selector.GetOutputPort())
+
+    out = list()
+    for val in level:
+        try:
+            selector.SetLowerThreshold
+        except AttributeError:
+            selector.ThresholdBetween(val, val)
+        else:
+            # default SetThresholdFunction is between, so:
+            selector.SetLowerThreshold(val)
+            selector.SetUpperThreshold(val)
+        geometry.Update()
+        polydata = geometry.GetOutput()
+        rr = vtk_to_numpy(polydata.GetPoints().GetData())
+        tris = vtk_to_numpy(polydata.GetPolys().GetConnectivityArray()).reshape(-1, 3)
+        rr = np.ascontiguousarray(rr)
+        tris = np.ascontiguousarray(tris)
+        out.append((rr, tris))
+    return out
+
+
+
 def get_vol_label_vertices(fname_aseg, volume_labels, units='m'):
     """
     Function to extract vertex positions in correct coords for volume labels. 
@@ -12,7 +116,7 @@ def get_vol_label_vertices(fname_aseg, volume_labels, units='m'):
     just to figure out they extract the volume vertex positions and transforms them to plot on white or pial mesh 
     """
     from mne._freesurfer import read_freesurfer_lut
-    from mne.surface import _marching_cubes
+    #from mne.surface import _marching_cubes
     import nibabel as nib
     from mne.transforms import apply_trans
 
@@ -28,7 +132,6 @@ def get_vol_label_vertices(fname_aseg, volume_labels, units='m'):
     vox_mri_t[:3] *= mult #(4, 4)
 
     lut, fs_colors = read_freesurfer_lut() #lookup table 
-    [v for v in lut if 'occipi' in v] 
 
     smooth=0.9 #default 
     fill_hole_size = None #default 
