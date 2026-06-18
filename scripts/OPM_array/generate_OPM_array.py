@@ -82,6 +82,8 @@ def add_sensor_layout(mne_object, sensor_layout: OPMSensorLayout):
         mne_object.info["chs"][idx]["loc"][:3] = pos
         mne_object.info["chs"][idx]["loc"][3:] = ori.flatten()
         mne_object.info["chs"][idx]["coil_type"] = sensor_layout.coil_type
+        mne_object.info["chs"][idx]["kind"] = mne.io.constants.FIFF.FIFFV_MEG_CH
+        mne_object.info["chs"][idx]["unit"] = mne.io.constants.FIFF.FIFF_UNIT_T
 
 
 def inflate_mesh(mesh: pv.PolyData, distance: float):
@@ -116,7 +118,7 @@ if __name__ == "__main__":
     data_path = path / "data" / "MNE-sample-data" / "MEG" / "sample"
     subjects_dir = path / "data" / "freesurfer" / "subjects"
     bem_fname = subjects_dir / "fsaverage" / "bem" / "fsaverage-5120-5120-5120-bem-sol.fif"
-    raw_fname = data_path / 'sample_audvis_raw.fif'
+    raw_fname = data_path / 'sample_audvis_filt-0-40_raw.fif'
 
     head_mri_trans = mne.Transform('head', 'mri')
     raw = mne.io.read_raw_fif(raw_fname, preload=False)
@@ -238,5 +240,6 @@ if __name__ == "__main__":
     mne.viz.plot_alignment(raw.info, trans=head_mri_t, subjects_dir=subjects_dir, surfaces=["head", "brain"], coord_frame="head", subject="fsaverage", meg="sensors")
 
     # save the info for later use
-    with open(template_path.parents[1] / f"fsaverage_OPM_{helmet}_{n_meas_axis_str}-info.fif", "wb") as f:
-        pickle.dump(raw.info, f)
+    raw.info.save(path / "data" / "OPM" / f"fsaverage_OPM_{helmet}_{n_meas_axis_str}-info.fif", overwrite=True)
+    # with open(template_path.parents[1] / f"fsaverage_OPM_{helmet}_{n_meas_axis_str}-info.fif", "wb") as f:
+    #     pickle.dump(raw.info, f)

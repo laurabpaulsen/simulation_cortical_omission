@@ -110,7 +110,7 @@ for region in regions:
 
 
 ############################################################################
-#                              SURFACE SIMULATIONS    
+#           SURFACE SIMULATIONS  - SQUIDS 
 ############################################################################
 amplitude = 0.1
 folder = f'/Users/au553087/Library/CloudStorage/OneDrive-Aarhusuniversitet/Work/RCB/simulation_study/simulation_cortical_omission/data/simulations/occpitial_{amplitude}nA'
@@ -465,16 +465,111 @@ for region in regions:
         #simulator.plot_joint(picks='mag', save=True, show=False)
 
 
+############################################################################
+#    SURFACE SIMULATIONS - OPMs
+############################################################################
+amplitude = 0.1
+folder = os.path.join(dir, f'data/simulations/OPMs/occpitial_{amplitude}nA')
+#regions = ['lateraloccipital-lh']
+regions = ["ctx-lh-lateraloccipital"]
+extents = [2., 4., 6., 8.,10.]
+
+for region in regions: 
+    print(f'--------- Running region {region} ----------')
+    if not os.path.exists(folder):
+        os.mkdir(folder)
+
+    sim_folder = folder
+
+    #Initate  
+    #simulator = SurfSimulator()
+    simulator = VolSimulator()
+    simulator.set_params(output_path=sim_folder)
+    simulator.create_info_obj(sensor_array='opm')
+
+    #Generate src     
+    simulator.generate_src(vol_labels=[region], save=True, plot=False)
+    #simulator.src
+
+    #Generate fwd 
+    simulator.generate_fwd(save=True)
+
+    #Plot fwd with sources 
+    simulator.plot_fwd_with_sources(surface='white')
+
+    for extent in extents: 
+
+        #Generate Label obj to use for simulations defined by label, seed and extent (if seeds=None it will compute center of mass and use that as seed)
+        #simulator.grow_sim_source_label(label_regex=region, location='center', extent=extent)
+        simulator.grow_sim_source_label(labels=region, seeds=None, extents=extent)
+
+        seed_pos_lh = simulator.src[0]['rr'][np.where(simulator.src[0]['vertno']==simulator.seeds[region])]
+        label_pos_lh = [simulator.src[0]['rr'][v] for v in simulator.src[0]['vertno'] if v in simulator.labels[0].vertices]
+
+        #Check vertex positions of full region, grown label and seed 
+        Brain = mne.viz.get_brain_class()
+        brain = Brain(
+            'fsaverage',
+            hemi='both',
+            surf='white',
+            alpha=0.5,
+            background='black',
+            cortex='low_contrast',
+            units='m',
+            subjects_dir=simulator.subjects_dir
+        )
+        brain.add_foci(label_pos_lh, coords_as_verts=False, color='green', hemi='lh', scale_factor=0.2) #vertices in label
+        # #brain.add_foci(label_pos_rh, coords_as_verts=False, color='red', hemi='rh', scale_factor=0.2) #vertices in label
+        brain.add_foci(seed_pos_lh, coords_as_verts=False, color='blue', hemi='lh', scale_factor=0.2) #position of seed used to grow label (center of mass)
+        # #brain.add_foci(seed_pos_rh, coords_as_verts=False, color='blue', hemi='rh', scale_factor=0.4) #position of seed used to grow label (center of mass)
+        brain.save_image(os.path.join(simulator.figure_path, f'source_label_{region}_{extent}.png'))
+        brain.close()
+
+        #Simualtor raw STCs 
+        simulator.create_time_series(amplitude=amplitude, latency=0.0)
+        simulator.plot_time_series(save=True, show=False)
+        simulator.initiate_sourcesimulator()
+        simulator.add_to_sourcesimulator(labels="all") #if all, will add time seires*events for all labels in simulator.labels
+
+        #Simulate raw 
+        simulator.sim_raw(add_iir=False, add_eog=False, add_ecg=False) #FIXME currently crashing if adding eog 
+        simulator.plot_raw(save=True, show=False)
+
+        #Compute evoked 
+        simulator.compute_evoked()
+        simulator.plot_joint(picks='grad', save=True, show=False)
+        simulator.plot_joint(picks='mag', save=True, show=False)
+
+
+
 
 
 ############################################################################
-#                     CHECKING STUFF IN SIMS     
+#                     CHECKING/TESTING STUFF IN SIMS     
 ############################################################################
 subject = 'fsaverage'
 subjects_dir = '/Users/au553087/Library/CloudStorage/OneDrive-Aarhusuniversitet/Work/RCB/simulation_study/simulation_cortical_omission/data/freesurfer/subjects'
 fname_trans = 'fsaverage'
 folder = '/Users/au553087/Library/CloudStorage/OneDrive-Aarhusuniversitet/Work/RCB/simulation_study/simulation_cortical_omission/data/simulations/test_2nA_increasing_size'
 
+################## TESITNG SETUP of INFO STRUCTURE WIHT OPM SENSOR ARRAY #############
+import pickle
+opm_fname = '/Volumes/Elements/simulation_cortical_omission/data/OPM/fsaverage_OPM_alpha1_single_axis-info.fif'
+opm_obj = mne.io.read_info(opm_fname)
+
+
+mne_fname = '/Volumes/Elements/simulation_cortical_omission/data/MNE-sample-data/MEG/sample/sample_audvis_filt-0-40_raw.fif'
+mne_info = mne.io.read_raw_fif(mne_fname).info
+
+mne.viz.plot_alignment(
+    opm_obj, 
+    dig=False, 
+    eeg=False,
+    surfaces=[],
+    meg=['helmet','sensors'],
+    coord_frame='meg'
+)
+mne.viz.set_3d_view(fig, azimuth=50, elevation=90, distance=0.5)
 
 ################## PLOTTING FWD WITH SOURCES #################
 

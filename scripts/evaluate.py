@@ -542,6 +542,8 @@ plt.suptitle('MNE Reconstruction')
 plt.savefig('/Volumes/Elements/simulation_cortical_omission/data/reconstructions/test_increasing_snr_methods/rle_by_snr_mne_zoom.png')
 plt.show()
 
+
+
 ##PLOT MIX 
 df_snr_mix.patch_size_surf = pd.to_numeric(df_snr_mix.patch_size_surf)
 df_snr_mix.patch_size_vol = pd.to_numeric(df_snr_mix.patch_size_vol)

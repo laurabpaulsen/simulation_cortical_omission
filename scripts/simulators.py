@@ -20,8 +20,7 @@ import os
 class VolSimulator():
 
     def __init__(self):
-        os.chdir(os.path.normpath(os.getcwd() + os.sep + os.pardir))
-        self.dir = os.getcwd()
+        self.dir = os.getcwd().replace('/scripts','')
         #os.chdir(os.path.join(dir, 'scripts'))
         #os.chdir(dir)
         pass
@@ -31,6 +30,7 @@ class VolSimulator():
 
         #Paths 
         self.raw_fname =  os.path.join(self.dir,'data/MNE-sample-data/MEG/sample/sample_audvis_filt-0-40_raw.fif')
+        self.raw_opm_info_fname = os.path.join(self.dir, 'data/OPM/fsaverage_OPM_alpha1_single_axis-info.fif')
         self.subject = 'fsaverage'
         self.subjects_dir = os.path.join(self.dir, 'data/freesurfer/subjects')
         self.fname_trans = 'fsaverage' #use built-in trans file for fsaverage 
@@ -50,9 +50,13 @@ class VolSimulator():
         self.vol_spacing = 5.0 
 
 
-    def create_info_obj(self):
+    def create_info_obj(self, sensor_array='squid'):
         self.sample_raw = mne.io.read_raw_fif(self.raw_fname)
-        self.info = self.sample_raw.pick(picks=['meg']).info
+        if sensor_array=='squids':
+            self.info = self.sample_raw.pick(picks=['meg']).info
+        if sensor_array=='opm':
+            self.info = mne.io.read_info(self.raw_opm_info_fname)
+
     
     def data_fun(self, amplitude, latency=0.02):
             """Generate random source time courses.
@@ -83,7 +87,8 @@ class VolSimulator():
 
     def create_time_series(self, amplitude, latency=0.02):
 
-        self.tstep = 1.0 / self.info['sfreq']
+        #self.tstep = 1.0 / self.info['sfreq']
+        self.tstep = 1.0 / 150.15374755859375 #sfreq in mne sample raw.info - used in all sims currently 
         self.times = np.arange(100, dtype=np.float64)*self.tstep
 
         n_events = 100
